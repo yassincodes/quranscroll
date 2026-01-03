@@ -341,7 +341,7 @@ export default function QuranScroll() {
     // Draw app name/watermark
     ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.font = '500 28px Arial';
-    ctx.fillText('Quran Verses', canvas.width / 2, canvas.height - 100);
+    ctx.fillText('QuranScroll.vercel.app', canvas.width / 2, canvas.height - 100);
     
     // Convert canvas to blob and download
     canvas.toBlob((blob) => {
