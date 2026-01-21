@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Heart, Share2, X, BookMarked, BarChart3, ArrowLeft } from "lucide-react"
+import { Heart, Share2, X, BookMarked, BarChart3, ArrowLeft, Home, CheckSquare2 } from "lucide-react"
 // Surah information (total ayahs per surah)
 const SURAH_DATA = {
   1: 7,
@@ -119,6 +119,296 @@ const SURAH_DATA = {
   113: 5,
   114: 6,
 }
+// Stats Page Component
+function StatsPage({ navigate, readingStats }) {
+  return (
+    <div style={styles.container}>
+      <style>{cssStyles}</style>
+      <div style={styles.pageContainer}>
+        <div style={styles.pageHeader}>
+          <h1 style={styles.pageTitle}>
+            <BarChart3 size={32} color="#d4af37" />
+            Reading Progress
+          </h1>
+        </div>
+
+        <div style={styles.modalContent}>
+          {Object.keys(readingStats).length === 0 ? (
+            <div style={styles.emptyState}>
+              <BarChart3 size={64} color="#666" />
+              <p style={styles.emptyText}>No reading history yet</p>
+              <p style={styles.emptySubtext}>Start scrolling to track your progress</p>
+            </div>
+          ) : (
+            <div style={styles.statsGrid}>
+              {Object.values(readingStats)
+                .sort((a, b) => a.surahNumber - b.surahNumber)
+                .map((stat) => {
+                  const totalAyahs = SURAH_DATA[stat.surahNumber] || 0
+                  const ayahsReadCount = Array.isArray(stat.ayahsRead) ? stat.ayahsRead.length : 0
+                  const percentage = totalAyahs > 0 ? Math.round((ayahsReadCount / totalAyahs) * 100) : 0
+
+                  return (
+                    <div
+                      key={stat.surahNumber}
+                      style={styles.statGridCard}
+                      className="stat-grid-card clickable"
+                      onClick={() => navigate(`/surah/${stat.surahNumber}`)}
+                    >
+                      <div style={styles.statCardTop}>
+                        <div style={styles.statNumber}>{stat.surahNumber}</div>
+                        <div style={styles.statCardContent}>
+                          <p style={styles.statCardSurahName}>{stat.surahName}</p>
+                          <p style={styles.statCardSurahNameArabic}>{stat.surahNameArabic}</p>
+                        </div>
+                      </div>
+
+                      <div style={styles.progressContainer}>
+                        <div style={styles.progressBar}>
+                          <div
+                            style={{
+                              ...styles.progressFill,
+                              width: `${percentage}%`,
+                            }}
+                          />
+                        </div>
+                        <div style={styles.progressText}>
+                          {ayahsReadCount}/{totalAyahs} ayahs • {percentage}%
+                        </div>
+                      </div>
+
+                      <div style={styles.statCardFooter}>
+                        <span style={styles.statCardViews}>{stat.totalReads} views</span>
+                        {stat.lastRead && (
+                          <span style={styles.statCardDate}>
+                            {new Date(stat.lastRead).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Likes Page Component
+function LikesPage({ navigate }) {
+  const [likedVerses, setLikedVerses] = useState([])
+
+  const storage = {
+    async get(key) {
+      try {
+        if (window.storage) {
+          return await window.storage.get(key)
+        } else {
+          const value = localStorage.getItem(key)
+          return value ? { key, value } : null
+        }
+      } catch (err) {
+        return null
+      }
+    },
+    async delete(key) {
+      try {
+        if (window.storage) {
+          return await window.storage.delete(key)
+        } else {
+          localStorage.removeItem(key)
+          return { key, deleted: true }
+        }
+      } catch (err) {
+        return null
+      }
+    },
+    async list(prefix) {
+      try {
+        if (window.storage) {
+          return await window.storage.list(prefix)
+        } else {
+          const keys = []
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.startsWith(prefix)) {
+              keys.push(key)
+            }
+          }
+          return { keys }
+        }
+      } catch (err) {
+        return { keys: [] }
+      }
+    },
+  }
+
+  useEffect(() => {
+    loadLikedVerses()
+  }, [])
+
+  const loadLikedVerses = async () => {
+    try {
+      const result = await storage.list("liked-ayah:")
+      if (result && result.keys) {
+        const versesData = []
+        for (const key of result.keys) {
+          try {
+            const verseResult = await storage.get(key)
+            if (verseResult && verseResult.value) {
+              const verse = JSON.parse(verseResult.value)
+              versesData.push(verse)
+            }
+          } catch (err) {
+            console.log("Error loading verse:", err)
+          }
+        }
+        setLikedVerses(versesData)
+      }
+    } catch (err) {
+      console.log("Error loading liked verses:", err)
+    }
+  }
+
+  const toggleLike = async (verse) => {
+    try {
+      await storage.delete(`liked-ayah:${verse.id}`)
+      setLikedVerses((prev) => prev.filter((v) => v.id !== verse.id))
+    } catch (err) {
+      console.error("Error toggling like:", err)
+    }
+  }
+
+  return (
+    <div style={styles.container}>
+      <style>{cssStyles}</style>
+      <div style={styles.pageContainer}>
+        <div style={styles.pageHeader}>
+          <h1 style={styles.pageTitle}>
+            <Heart size={32} fill="#d4af37" color="#d4af37" />
+            Liked Ayahs
+          </h1>
+        </div>
+
+        <div style={styles.modalContent}>
+          {likedVerses.length === 0 ? (
+            <div style={styles.emptyState}>
+              <Heart size={64} color="#666" />
+              <p style={styles.emptyText}>No liked ayahs yet</p>
+              <p style={styles.emptySubtext}>Start liking ayahs to save them here</p>
+            </div>
+          ) : (
+            <div style={styles.likedList}>
+              {likedVerses.map((verse) => (
+                <div key={verse.id} style={styles.likedCard} className="liked-card">
+                  <p style={styles.likedVerseTextArabic}>{verse.textArabic}</p>
+                  <p style={styles.likedVerseText}>{verse.textEnglish}</p>
+                  <div style={styles.likedVerseFooter}>
+                    <span style={styles.likedReference}>{verse.reference}</span>
+                    <button style={styles.unlikeButton} onClick={() => toggleLike(verse)} className="unlike-button">
+                      <Heart size={20} fill="#d4af37" color="#d4af37" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Prayer Todo List Component
+function TodoPage({ navigate }) {
+  const prayers = [
+    { id: 1, name: "Fajr", arabicName: "الفجر", time: "Dawn", description: "Morning prayer" },
+    { id: 2, name: "Dhuhr", arabicName: "الظهر", time: "Midday", description: "Noon prayer" },
+    { id: 3, name: "Asr", arabicName: "العصر", time: "Afternoon", description: "Afternoon prayer" },
+    { id: 4, name: "Maghrib", arabicName: "المغرب", time: "Sunset", description: "Evening prayer" },
+    { id: 5, name: "Isha", arabicName: "العشاء", time: "Night", description: "Night prayer" },
+  ]
+
+  const [completedPrayers, setCompletedPrayers] = useState({})
+
+  useEffect(() => {
+    loadCompletedPrayers()
+  }, [])
+
+  const loadCompletedPrayers = async () => {
+    try {
+      const value = localStorage.getItem("completed-prayers")
+      if (value) {
+        const data = JSON.parse(value)
+        setCompletedPrayers(data)
+      }
+    } catch (err) {
+      console.log("Error loading completed prayers:", err)
+    }
+  }
+
+  const togglePrayerCompleted = async (prayerId) => {
+    const newCompleted = { ...completedPrayers, [prayerId]: !completedPrayers[prayerId] }
+    setCompletedPrayers(newCompleted)
+    try {
+      localStorage.setItem("completed-prayers", JSON.stringify(newCompleted))
+    } catch (err) {
+      console.error("Error saving completed prayers:", err)
+    }
+  }
+
+  return (
+    <div style={styles.container}>
+      <style>{cssStyles}</style>
+      <div style={styles.todoContainer}>
+        <div style={styles.todoHeader}>
+          <h1 style={styles.todoTitle}>Daily Prayers</h1>
+          <p style={styles.todoSubtitle}>أوقات الصلاة</p>
+        </div>
+
+        <div style={styles.prayersList}>
+          {prayers.map((prayer) => (
+            <div
+              key={prayer.id}
+              style={{
+                ...styles.prayerCard,
+                background: completedPrayers[prayer.id] ? "rgba(212, 175, 55, 0.2)" : "rgba(255, 255, 255, 0.05)",
+              }}
+              className="prayer-card"
+            >
+              <div style={styles.prayerCheckbox}>
+                <input
+                  type="checkbox"
+                  checked={completedPrayers[prayer.id] || false}
+                  onChange={() => togglePrayerCompleted(prayer.id)}
+                  style={styles.checkbox}
+                />
+              </div>
+              <div style={styles.prayerInfo}>
+                <h3 style={styles.prayerName}>{prayer.name}</h3>
+                <p style={styles.prayerArabic}>{prayer.arabicName}</p>
+                <p style={styles.prayerTime}>{prayer.time}</p>
+              </div>
+              {completedPrayers[prayer.id] && <div style={styles.checkmark}>✓</div>}
+            </div>
+          ))}
+        </div>
+
+        <div style={styles.prayerStats}>
+          <p style={styles.statsText}>
+            Completed: {Object.values(completedPrayers).filter(Boolean).length} / {prayers.length}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Simple Router Component
 function Router({ children }) {
   const [currentPath, setCurrentPath] = useState(window.location.hash.slice(1) || "/")
@@ -135,6 +425,63 @@ function Router({ children }) {
   }
   return children({ currentPath, navigate })
 }
+
+// Bottom Navigation Component
+function BottomNav({ currentPath, navigate }) {
+  return (
+    <div style={styles.bottomNav}>
+      <button
+        style={{
+          ...styles.navButton,
+          borderTop: currentPath === "/" ? "3px solid #d4af37" : "3px solid transparent",
+        }}
+        onClick={() => navigate("/")}
+        className="nav-button"
+        type="button"
+      >
+        <Home size={24} color={currentPath === "/" ? "#d4af37" : "white"} />
+        <span style={styles.navLabel}>Home</span>
+      </button>
+      <button
+        style={{
+          ...styles.navButton,
+          borderTop: currentPath === "/stats" ? "3px solid #d4af37" : "3px solid transparent",
+        }}
+        onClick={() => navigate("/stats")}
+        className="nav-button"
+        type="button"
+      >
+        <BarChart3 size={24} color={currentPath === "/stats" ? "#d4af37" : "white"} />
+        <span style={styles.navLabel}>Stats</span>
+      </button>
+      <button
+        style={{
+          ...styles.navButton,
+          borderTop: currentPath === "/likes" ? "3px solid #d4af37" : "3px solid transparent",
+        }}
+        onClick={() => navigate("/likes")}
+        className="nav-button"
+        type="button"
+      >
+        <Heart size={24} color={currentPath === "/likes" ? "#d4af37" : "white"} />
+        <span style={styles.navLabel}>Likes</span>
+      </button>
+      <button
+        style={{
+          ...styles.navButton,
+          borderTop: currentPath === "/prayers" ? "3px solid #d4af37" : "3px solid transparent",
+        }}
+        onClick={() => navigate("/prayers")}
+        className="nav-button"
+        type="button"
+      >
+        <CheckSquare2 size={24} color={currentPath === "/prayers" ? "#d4af37" : "white"} />
+        <span style={styles.navLabel}>Prayers</span>
+      </button>
+    </div>
+  )
+}
+
 // Surah Grid Component
 function SurahGrid({ surahNumber, navigate }) {
   const [verses, setVerses] = useState([])
@@ -720,6 +1067,7 @@ function SurahPage({ surahNumber, startAyah, navigate, readingStats, setReadingS
     </div>
   )
 }
+
 // Main App Component
 export default function App() {
   const [readingStats, setReadingStats] = useState({})
@@ -744,12 +1092,14 @@ export default function App() {
   return (
     <Router>
       {({ currentPath, navigate }) => {
+        let content = null
+
         if (currentPath.match(/^\/surah\/\d+\/\d+$/)) {
           const parts = currentPath.split("/")
           const surahNumber = Number.parseInt(parts[2])
           const startAyah = parts[3]
           if (surahNumber >= 1 && surahNumber <= 114) {
-            return (
+            content = (
               <SurahPage
                 surahNumber={surahNumber}
                 startAyah={startAyah}
@@ -759,16 +1109,35 @@ export default function App() {
               />
             )
           }
-        }
-
-        if (currentPath.match(/^\/surah\/\d+$/)) {
+        } else if (currentPath.match(/^\/surah\/\d+$/)) {
           const surahNumber = Number.parseInt(currentPath.split("/")[2])
           if (surahNumber >= 1 && surahNumber <= 114) {
-            return <SurahGrid surahNumber={surahNumber} navigate={navigate} />
+            content = <SurahGrid surahNumber={surahNumber} navigate={navigate} />
           }
+        } else if (currentPath === "/stats") {
+          content = (
+            <StatsPage navigate={navigate} readingStats={readingStats} />
+          )
+        } else if (currentPath === "/likes") {
+          content = (
+            <LikesPage navigate={navigate} />
+          )
+        } else if (currentPath === "/prayers") {
+          content = (
+            <TodoPage navigate={navigate} />
+          )
+        } else {
+          content = <HomePage navigate={navigate} readingStats={readingStats} setReadingStats={setReadingStats} />
         }
 
-        return <HomePage navigate={navigate} readingStats={readingStats} setReadingStats={setReadingStats} />
+        return (
+          <div style={{ display: "flex", flexDirection: "column", width: "100vw", height: "100vh" }}>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              {content}
+            </div>
+            <BottomNav currentPath={currentPath} navigate={navigate} />
+          </div>
+        )
       }}
     </Router>
   )
@@ -789,6 +1158,7 @@ const styles = {
     WebkitOverflowScrolling: "touch",
     overscrollBehavior: "contain",
     touchAction: "pan-y",
+    paddingBottom: "80px",
   },
   verseSlide: {
     width: "100%",
@@ -1303,6 +1673,155 @@ const styles = {
     WebkitBoxOrient: "vertical",
     flex: 1,
   },
+  bottomNav: {
+    position: "fixed",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: "80px",
+    background: "linear-gradient(135deg, #0f4c3a 0%, #1a5c4a 100%)",
+    display: "flex",
+    justifyContent: "space-around",
+    alignItems: "flex-start",
+    borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+    zIndex: 999,
+    paddingBottom: "10px",
+  },
+  navButton: {
+    background: "transparent",
+    border: "none",
+    color: "white",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "4px",
+    cursor: "pointer",
+    padding: "12px 8px 8px 8px",
+    flex: 1,
+    height: "100%",
+    transition: "all 0.2s",
+    touchAction: "manipulation",
+  },
+  navLabel: {
+    fontSize: "11px",
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  pageContainer: {
+    width: "100%",
+    height: "100%",
+    overflowY: "auto",
+    paddingBottom: "100px",
+  },
+  pageHeader: {
+    padding: "24px",
+    background: "linear-gradient(135deg, #0f4c3a 0%, #1a5c4a 100%)",
+    borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+    position: "sticky",
+    top: 0,
+    zIndex: 100,
+  },
+  pageTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    fontSize: "28px",
+    fontWeight: "bold",
+    color: "white",
+    margin: 0,
+  },
+  todoContainer: {
+    width: "100%",
+    maxWidth: "600px",
+    margin: "0 auto",
+    padding: "24px",
+    paddingBottom: "120px",
+    overflowY: "auto",
+    height: "100%",
+  },
+  todoHeader: {
+    textAlign: "center",
+    marginBottom: "32px",
+  },
+  todoTitle: {
+    fontSize: "32px",
+    fontWeight: "bold",
+    color: "white",
+    margin: 0,
+    marginBottom: "8px",
+  },
+  todoSubtitle: {
+    fontSize: "18px",
+    color: "#d4af37",
+    direction: "rtl",
+    margin: 0,
+  },
+  prayersList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  prayerCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: "16px",
+    padding: "16px",
+    borderRadius: "12px",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    transition: "all 0.3s ease",
+    cursor: "pointer",
+  },
+  prayerCheckbox: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkbox: {
+    width: "24px",
+    height: "24px",
+    cursor: "pointer",
+    accentColor: "#d4af37",
+  },
+  prayerInfo: {
+    flex: 1,
+  },
+  prayerName: {
+    fontSize: "18px",
+    fontWeight: "bold",
+    color: "white",
+    margin: 0,
+    marginBottom: "4px",
+  },
+  prayerArabic: {
+    fontSize: "16px",
+    color: "#d4af37",
+    direction: "rtl",
+    margin: 0,
+    marginBottom: "4px",
+  },
+  prayerTime: {
+    fontSize: "14px",
+    color: "rgba(255, 255, 255, 0.6)",
+    margin: 0,
+  },
+  checkmark: {
+    fontSize: "24px",
+    color: "#d4af37",
+    fontWeight: "bold",
+  },
+  prayerStats: {
+    marginTop: "32px",
+    padding: "16px",
+    background: "rgba(212, 175, 55, 0.1)",
+    borderRadius: "12px",
+    textAlign: "center",
+  },
+  statsText: {
+    fontSize: "16px",
+    color: "white",
+    margin: 0,
+  },
 }
 const cssStyles = `
   * {
@@ -1352,6 +1871,16 @@ const cssStyles = `
     transform: translateY(-4px);
     background: rgba(255, 255, 255, 0.1) !important;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+  .nav-button:hover {
+    background: rgba(212, 175, 55, 0.1);
+  }
+  .nav-button:active {
+    transform: scale(0.95);
+  }
+  .prayer-card:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    transform: translateX(4px);
   }
   *::-webkit-scrollbar {
     display: none;
@@ -1533,37 +2062,69 @@ function HomePage({ navigate, readingStats, setReadingStats }) {
     }
   }
 
-  const fetchRandomVerse = async () => {
-    try {
-      const randomAyahNumber = Math.floor(Math.random() * 6236) + 1
+ const fetchRandomVerse = async () => {
+  try {
+    // Get list of all read ayahs
+    const readAyahsSet = new Set();
+    Object.values(readingStats).forEach(stat => {
+      if (Array.isArray(stat.ayahsRead)) {
+        stat.ayahsRead.forEach(ayahNum => {
+          readAyahsSet.add(`${stat.surahNumber}:${ayahNum}`);
+        });
+      }
+    });
+
+    // Total ayahs in Quran = 6236
+    const MAX_ATTEMPTS = 50; // Prevent infinite loop
+    let attempts = 0;
+
+    while (attempts < MAX_ATTEMPTS) {
+      const randomAyahNumber = Math.floor(Math.random() * 6236) + 1;
 
       const response = await fetch(
         `https://api.alquran.cloud/v1/ayah/${randomAyahNumber}/editions/quran-uthmani,en.asad`,
-      )
-      const data = await response.json()
+      );
+      const data = await response.json();
 
       if (data.code === 200 && data.data) {
-        const arabicAyah = data.data[0]
-        const englishAyah = data.data[1]
-
-        return {
-          id: `${arabicAyah.number}`,
-          textArabic: arabicAyah.text,
-          textEnglish: englishAyah.text,
-          reference: `${arabicAyah.surah.englishName} ${arabicAyah.surah.number}:${arabicAyah.surah.number}`,
-          surahName: arabicAyah.surah.englishName,
-          surahNameArabic: arabicAyah.surah.name,
-          surahNumber: arabicAyah.surah.number,
-          ayahNumber: arabicAyah.numberInSurah,
+        const arabicAyah = data.data[0];
+        const englishAyah = data.data[1];
+        
+        const ayahKey = `${arabicAyah.surah.number}:${arabicAyah.numberInSurah}`;
+        
+        // Check if this ayah has NOT been read
+        if (!readAyahsSet.has(ayahKey)) {
+          return {
+            id: `${arabicAyah.number}`,
+            textArabic: arabicAyah.text,
+            textEnglish: englishAyah.text,
+            reference: `${arabicAyah.surah.englishName} ${arabicAyah.surah.number}:${arabicAyah.numberInSurah}`,
+            surahName: arabicAyah.surah.englishName,
+            surahNameArabic: arabicAyah.surah.name,
+            surahNumber: arabicAyah.surah.number,
+            ayahNumber: arabicAyah.numberInSurah,
+          };
         }
       }
-    } catch (err) {
-      console.error("Error fetching verse:", err)
+      
+      attempts++;
     }
 
-    return null
+    // If we've read everything or couldn't find unread after attempts
+    if (readAyahsSet.size >= 6236) {
+      alert('🎉 Masha Allah! You have read all 6236 ayahs of the Quran!');
+      return null;
+    }
+
+    // Fallback: return any random ayah if we couldn't find unread
+    return null;
+
+  } catch (err) {
+    console.error("Error fetching verse:", err);
   }
 
+  return null;
+};
   const loadMultipleVerses = async (count) => {
     setLoading(true)
     const newVerses = []
@@ -1706,17 +2267,6 @@ function HomePage({ navigate, readingStats, setReadingStats }) {
     <div style={styles.container}>
       <style>{cssStyles}</style>
 
-      <button style={styles.floatingButton} onClick={() => setShowLikedModal(true)} className="floating-button">
-        <BookMarked size={24} color="white" />
-        {likedVerses.length > 0 && <span style={styles.badge}>{likedVerses.length}</span>}
-      </button>
-      <button
-        style={{ ...styles.floatingButton, top: "90px" }}
-        onClick={() => setShowStatsModal(true)}
-        className="floating-button"
-      >
-        <BarChart3 size={24} color="white" />
-      </button>
       {showLikedModal && (
         <div style={styles.modalOverlay} onClick={() => setShowLikedModal(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
