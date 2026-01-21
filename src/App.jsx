@@ -335,31 +335,144 @@ function TodoPage({ navigate }) {
   ]
 
   const [completedPrayers, setCompletedPrayers] = useState({})
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [allPrayersByDate, setAllPrayersByDate] = useState({})
 
   useEffect(() => {
     loadCompletedPrayers()
   }, [])
 
+  const getTodayKey = (date = new Date()) => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+  }
+
   const loadCompletedPrayers = async () => {
     try {
-      const value = localStorage.getItem("completed-prayers")
-      if (value) {
-        const data = JSON.parse(value)
-        setCompletedPrayers(data)
+      const allData = {}
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith("prayers-")) {
+          const value = localStorage.getItem(key)
+          if (value) {
+            allData[key.replace("prayers-", "")] = JSON.parse(value)
+          }
+        }
       }
+      setAllPrayersByDate(allData)
+
+      const todayKey = getTodayKey()
+      const todayPrayers = allData[todayKey] || {}
+      setCompletedPrayers(todayPrayers)
     } catch (err) {
       console.log("Error loading completed prayers:", err)
     }
   }
 
   const togglePrayerCompleted = async (prayerId) => {
-    const newCompleted = { ...completedPrayers, [prayerId]: !completedPrayers[prayerId] }
-    setCompletedPrayers(newCompleted)
+    const todayKey = getTodayKey(selectedDate)
+    const dayPrayers = allPrayersByDate[todayKey] || {}
+    const newCompleted = { ...dayPrayers, [prayerId]: !dayPrayers[prayerId] }
+    
+    const newAllData = { ...allPrayersByDate, [todayKey]: newCompleted }
+    setAllPrayersByDate(newAllData)
+    
+    if (getTodayKey() === todayKey) {
+      setCompletedPrayers(newCompleted)
+    }
+
     try {
-      localStorage.setItem("completed-prayers", JSON.stringify(newCompleted))
+      localStorage.setItem(`prayers-${todayKey}`, JSON.stringify(newCompleted))
     } catch (err) {
       console.error("Error saving completed prayers:", err)
     }
+  }
+
+  const handleDateSelect = (date) => {
+    setSelectedDate(date)
+    const dateKey = getTodayKey(date)
+    const dayPrayers = allPrayersByDate[dateKey] || {}
+    setCompletedPrayers(dayPrayers)
+  }
+
+  const getDaysInMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+  }
+
+  const getFirstDayOfMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay()
+  }
+
+  const isDateCompleted = (date) => {
+    const dateKey = getTodayKey(date)
+    const dayPrayers = allPrayersByDate[dateKey] || {}
+    const completedCount = Object.values(dayPrayers).filter(Boolean).length
+    return completedCount === 5
+  }
+
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(selectedDate)
+    const firstDay = getFirstDayOfMonth(selectedDate)
+    const days = []
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null)
+    }
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i)
+    }
+
+    return (
+      <div style={styles.calendarContainer}>
+        <div style={styles.monthYear}>
+          {selectedDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+        </div>
+        <div style={styles.dayNamesContainer}>
+          {dayNames.map((day) => (
+            <div key={day} style={styles.dayName}>
+              {day}
+            </div>
+          ))}
+        </div>
+        <div style={styles.daysContainer}>
+          {days.map((day, index) => {
+            if (day === null) {
+              return <div key={`empty-${index}`} style={styles.emptyDay} />
+            }
+
+            const currentDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day)
+            const isCompleted = isDateCompleted(currentDate)
+            const isToday =
+              currentDate.toDateString() === new Date().toDateString()
+            const isSelected = currentDate.toDateString() === selectedDate.toDateString()
+
+            return (
+              <button
+                key={day}
+                style={{
+                  ...styles.calendarDay,
+                  background: isSelected
+                    ? "#d4af37"
+                    : isCompleted
+                      ? "rgba(212, 175, 55, 0.3)"
+                      : "rgba(255, 255, 255, 0.05)",
+                  border: isToday ? "2px solid #d4af37" : "1px solid rgba(255, 255, 255, 0.1)",
+                  color: isSelected ? "#0f4c3a" : "white",
+                }}
+                onClick={() => handleDateSelect(currentDate)}
+                type="button"
+              >
+                <div style={styles.calendarDayNumber}>{day}</div>
+                {isCompleted && !isSelected && (
+                  <div style={styles.calendarCheckmark}>✓</div>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -369,6 +482,17 @@ function TodoPage({ navigate }) {
         <div style={styles.todoHeader}>
           <h1 style={styles.todoTitle}>Daily Prayers</h1>
           <p style={styles.todoSubtitle}>أوقات الصلاة</p>
+        </div>
+
+        {renderCalendar()}
+
+        <div style={styles.selectedDateHeader}>
+          <p style={styles.selectedDateText}>
+            {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+          </p>
+          {selectedDate.toDateString() === new Date().toDateString() && (
+            <span style={styles.todayBadge}>Today</span>
+          )}
         </div>
 
         <div style={styles.prayersList}>
@@ -1821,6 +1945,89 @@ const styles = {
     fontSize: "16px",
     color: "white",
     margin: 0,
+  },
+  calendarContainer: {
+    padding: "20px 16px",
+    marginBottom: "24px",
+    background: "rgba(255, 255, 255, 0.05)",
+    borderRadius: "12px",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+  },
+  monthYear: {
+    fontSize: "18px",
+    fontWeight: "bold",
+    color: "white",
+    textAlign: "center",
+    marginBottom: "16px",
+  },
+  dayNamesContainer: {
+    display: "grid",
+    gridTemplateColumns: "repeat(7, 1fr)",
+    gap: "8px",
+    marginBottom: "12px",
+  },
+  dayName: {
+    fontSize: "12px",
+    color: "#d4af37",
+    textAlign: "center",
+    fontWeight: "bold",
+  },
+  daysContainer: {
+    display: "grid",
+    gridTemplateColumns: "repeat(7, 1fr)",
+    gap: "8px",
+  },
+  calendarDay: {
+    position: "relative",
+    padding: "12px",
+    aspectRatio: "1",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    borderRadius: "8px",
+    background: "rgba(255, 255, 255, 0.05)",
+    color: "white",
+    cursor: "pointer",
+    transition: "all 0.2s",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyDay: {
+    padding: "12px",
+    aspectRatio: "1",
+  },
+  calendarDayNumber: {
+    fontSize: "16px",
+    fontWeight: "bold",
+  },
+  calendarCheckmark: {
+    position: "absolute",
+    top: "2px",
+    right: "2px",
+    fontSize: "12px",
+    color: "#d4af37",
+    fontWeight: "bold",
+  },
+  selectedDateHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "12px",
+    marginBottom: "20px",
+  },
+  selectedDateText: {
+    fontSize: "18px",
+    fontWeight: "bold",
+    color: "#d4af37",
+    margin: 0,
+  },
+  todayBadge: {
+    fontSize: "12px",
+    background: "#d4af37",
+    color: "#0f4c3a",
+    padding: "4px 12px",
+    borderRadius: "20px",
+    fontWeight: "bold",
   },
 }
 const cssStyles = `
